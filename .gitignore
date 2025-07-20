@@ -1,0 +1,55 @@
+# Build results
+**/bin/
+**/obj/
+
+# Rider
+.idea/
+*.sln.DotSettings.user
+
+# VS Code
+.vscode/
+
+# Visual Studio
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# Logs
+*.log
+
+# Dotnet artifacts
+project.lock.json
+project.fragment.lock.json
+project.nuget.cache
+project.assets.json
+project.packagespec.json
+*.csproj.nuget.g.props
+*.csproj.nuget.g.targets
+*.csproj.AssemblyReference.cache
+*.AssemblyInfoInputs.cache
+*.CoreCompileInputs.cache
+
+# Rider NuGet & cache
+*.rider.project.model.nuget.info
+*.rider.project.restore.info
+
+# Shelf backups (from Rider)
+.idea/**/shelf/
+
+# Debug output
+*.pdb
+*.exe
+*.dll
+
+# Static web assets
+staticwebassets.build.json
+staticwebassets.build.endpoints.json
+
+# ref and refint folders
+**/ref/
+**/refint/

@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ResourceService", "ResourceService\ResourceService.csproj", "{F024C1BF-92DB-42A2-AFD6-31672D001520}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IdentityService", "IdentityService\IdentityService.csproj", "{2C3EE0FC-ADB6-49A9-BB49-9A5313957574}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedLibrary", "SharedLibrary\SharedLibrary.csproj", "{8A5B4905-6C90-4DF4-BAA3-FBDD399E8AEC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F024C1BF-92DB-42A2-AFD6-31672D001520}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F024C1BF-92DB-42A2-AFD6-31672D001520}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F024C1BF-92DB-42A2-AFD6-31672D001520}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F024C1BF-92DB-42A2-AFD6-31672D001520}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C3EE0FC-ADB6-49A9-BB49-9A5313957574}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C3EE0FC-ADB6-49A9-BB49-9A5313957574}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C3EE0FC-ADB6-49A9-BB49-9A5313957574}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C3EE0FC-ADB6-49A9-BB49-9A5313957574}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A5B4905-6C90-4DF4-BAA3-FBDD399E8AEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A5B4905-6C90-4DF4-BAA3-FBDD399E8AEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A5B4905-6C90-4DF4-BAA3-FBDD399E8AEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A5B4905-6C90-4DF4-BAA3-FBDD399E8AEC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
