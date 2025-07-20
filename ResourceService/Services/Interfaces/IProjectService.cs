@@ -1,6 +1,12 @@
+using ResourceService.Entities;
+
 namespace ResourceService.Services.Interfaces;
 
-public class IProjectService
+public interface IProjectService
 {
-    
+    Task<List<Project>> GetAllAsync();
+    Task<Project?> GetByIdAsync(Guid id);
+    Task<Project> CreateAsync(Project project);
+    Task<Project> UpdateAsync(Project project);
+    Task<bool> DeleteAsync(Guid id);
 }
