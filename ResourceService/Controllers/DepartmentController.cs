@@ -25,7 +25,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    [Authorize(policy: "CanViewDepartments")]
+    [Authorize(policy: "CanViewDepartment")]
     public async Task<ActionResult<Department>> GetById(Guid id)
     {
         var department = await _service.GetByIdAsync(id);

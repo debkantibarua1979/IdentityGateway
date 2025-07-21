@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResourceService.Services.Interfaces;
 
@@ -15,6 +16,7 @@ public class TaskController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(policy:"CanViewTasks")]
     public async Task<ActionResult<List<Task>>> GetAll()
     {
         var tasks = await _service.GetAllAsync();
@@ -22,6 +24,7 @@ public class TaskController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(policy: "CanViewTask")]
     public async Task<ActionResult<Task>> GetById(Guid id)
     {
         var task = await _service.GetByIdAsync(id);
@@ -34,6 +37,7 @@ public class TaskController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(policy: "CanCreateTask")]
     public async Task<ActionResult<Task>> Create(Entities.Task task)
     {
         var created = await _service.CreateAsync(task);
@@ -41,6 +45,7 @@ public class TaskController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(policy: "CanUpdateTask")]
     public async Task<ActionResult<Task>> Update(Guid id, Entities.Task task)
     {
         if (id != task.Id)
@@ -53,6 +58,7 @@ public class TaskController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(policy: "CanDeleteTask")]
     public async Task<ActionResult> Delete(Guid id)
     {
         var deleted = await _service.DeleteAsync(id);
