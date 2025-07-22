@@ -1,26 +1,33 @@
-using System.IdentityModel.Tokens.Jwt;
-using IdentityService.Data;
-using Microsoft.EntityFrameworkCore;
-
+using IdentityService.Repositories.Interfaces;
 
 namespace IdentityService.Middlewares;
 
-public class TokenExpirationMiddleware : IMiddleware
-{
-    private readonly AppDbContext _db;
+using System.IdentityModel.Tokens.Jwt;
+using IdentityService.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using Microsoft.IdentityModel.JsonWebTokens;
+using System.IdentityModel.Tokens.Jwt;
 
-    public TokenExpirationMiddleware(AppDbContext db)
+
+
+public class TokenExpirationMiddleware
+{
+    private readonly RequestDelegate _next;
+
+    public TokenExpirationMiddleware(RequestDelegate next)
     {
-        _db = db;
+        _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    public async Task Invoke(HttpContext context)
     {
         var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
 
-        if (!string.IsNullOrEmpty(token))
+        if (!string.IsNullOrWhiteSpace(token))
         {
             var handler = new JwtSecurityTokenHandler();
+
             if (handler.CanReadToken(token))
             {
                 var jwt = handler.ReadJwtToken(token);
@@ -28,10 +35,12 @@ public class TokenExpirationMiddleware : IMiddleware
                 var ipClaim = jwt.Claims.FirstOrDefault(c => c.Type == "ip")?.Value;
                 var requestIp = context.Connection.RemoteIpAddress?.ToString();
 
-                var storedToken = await _db.AccessTokens
-                    .FirstOrDefaultAsync(t => t.Token == token && t.UserId.ToString() == userId);
+                var tokenRepo = context.RequestServices.GetRequiredService<ITokenRepository>();
+                var storedToken = await tokenRepo.GetAccessTokenAsync(token);
 
-                if (storedToken == null || storedToken.ExpiresAt < DateTime.UtcNow || storedToken.IpAddress != requestIp)
+                if (storedToken == null ||
+                    storedToken.ExpiresAt < DateTime.UtcNow ||
+                    storedToken.IpAddress != requestIp)
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsync("Access token is invalid, expired, or IP-mismatched.");
@@ -40,6 +49,6 @@ public class TokenExpirationMiddleware : IMiddleware
             }
         }
 
-        await next(context);
+        await _next(context);
     }
 }

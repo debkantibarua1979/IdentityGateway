@@ -7,26 +7,26 @@ namespace IdentityService.Repositories.Implementations;
 
 public class UserRepository : IUserRepository
 {
-    private readonly AppDbContext _context;
+    private readonly AppDbContext _db;
 
-    public UserRepository(AppDbContext context)
+    public UserRepository(AppDbContext db)
     {
-        _context = context;
+        _db = db;
     }
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        return await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
-    public async Task<User?> GetByIdAsync(Guid userId)
+    public async Task<User?> GetByIdAsync(Guid id)
     {
-        return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        return await _db.Users.FindAsync(id);
     }
 
     public async Task CreateUserAsync(User user)
     {
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
     }
 }

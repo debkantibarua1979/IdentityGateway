@@ -1,12 +1,8 @@
 using IdentityService.Dtos;
 using IdentityService.Services.Interfaces;
-
-namespace IdentityService.AuthController;
-
-using IdentityService.Services;
 using Microsoft.AspNetCore.Mvc;
 
-
+namespace IdentityService.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -19,23 +15,30 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(RegisterRequest request)
+    {
+        var result = await _authService.RegisterAsync(request);
+        if (!result.Success)
+            return BadRequest(result.Message);
+        return Ok(result);
+    }
+
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login(LoginRequest request)
     {
         var response = await _authService.LoginAsync(request);
         if (response == null)
-            return Unauthorized("Invalid email or password");
-
+            return Unauthorized("Invalid credentials.");
         return Ok(response);
     }
 
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+    public async Task<IActionResult> Refresh(RefreshTokenRequest request)
     {
         var response = await _authService.RefreshAccessTokenAsync(request);
         if (response == null)
-            return Unauthorized("Refresh token invalid or expired");
-
+            return Unauthorized("Invalid or expired refresh token.");
         return Ok(response);
     }
 }

@@ -17,17 +17,17 @@ using IdentityService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---- Load Configuration ----
-var configuration = builder.Configuration;
+// ✅ Load Ocelot configuration separately
+builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
 
 // ---- Configure JwtOptions ----
-builder.Services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
-var jwtOptions = configuration.GetSection("Jwt").Get<JwtOptions>();
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>();
 var key = Encoding.UTF8.GetBytes(jwtOptions.Key);
 
 // ---- Database (SQLite) ----
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ---- Repositories ----
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -87,8 +87,8 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// ---- Ocelot Gateway ----
-builder.Services.AddOcelot(configuration);
+
+builder.Services.AddOcelot();
 
 var app = builder.Build();
 
@@ -100,10 +100,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
-app.UseMiddleware<TokenExpirationMiddleware>(); // Custom middleware to reject expired tokens from DB
+app.UseMiddleware<TokenExpirationMiddleware>();
 app.UseAuthorization();
+
 app.MapControllers();
 
-// ---- Run as API Gateway (Ocelot) ----
+
 await app.UseOcelot();
 app.Run();
