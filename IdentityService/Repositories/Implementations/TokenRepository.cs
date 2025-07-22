@@ -34,11 +34,20 @@ public class TokenRepository: ITokenRepository
 
     public async Task InvalidateRefreshTokenAsync(string refreshToken)
     {
-        var token = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == refreshToken);
-        if (token != null)
+        var existing = await _db.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
+
+        if (existing != null)
         {
-            token.IsRevoked = true;
+            existing.IsRevoked = true;
             await _db.SaveChangesAsync();
         }
     }
+    
+    public async Task<AccessToken?> GetAccessTokenAsync(string token)
+    {
+        return await _db.AccessTokens
+            .FirstOrDefaultAsync(t => t.Token == token);
+    }
+
 }

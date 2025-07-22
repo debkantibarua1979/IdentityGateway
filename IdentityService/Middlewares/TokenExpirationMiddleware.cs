@@ -1,54 +1,50 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using IdentityService.Repositories.Interfaces;
+using JwtRegisteredClaimNames = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames;
 
 namespace IdentityService.Middlewares;
 
-using System.IdentityModel.Tokens.Jwt;
-using IdentityService.Data;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http;
-using Microsoft.IdentityModel.JsonWebTokens;
-using System.IdentityModel.Tokens.Jwt;
+using JwtClaims = JwtRegisteredClaimNames;
 
-
-
-public class TokenExpirationMiddleware
+public class TokenExpirationMiddleware : IMiddleware
 {
-    private readonly RequestDelegate _next;
+    private readonly ITokenRepository _tokenRepo;
 
-    public TokenExpirationMiddleware(RequestDelegate next)
+    public TokenExpirationMiddleware(ITokenRepository tokenRepo)
     {
-        _next = next;
+        _tokenRepo = tokenRepo;
     }
 
-    public async Task Invoke(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+        var token = context.Request.Headers["Authorization"]
+            .FirstOrDefault()?.Replace("Bearer ", "");
 
-        if (!string.IsNullOrWhiteSpace(token))
+        if (!string.IsNullOrEmpty(token))
         {
             var handler = new JwtSecurityTokenHandler();
-
             if (handler.CanReadToken(token))
             {
                 var jwt = handler.ReadJwtToken(token);
-                var userId = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-                var ipClaim = jwt.Claims.FirstOrDefault(c => c.Type == "ip")?.Value;
+                var userId = jwt.Claims.FirstOrDefault(c => c.Type == JwtClaims.Sub)?.Value;
+                var tokenIp = jwt.Claims.FirstOrDefault(c => c.Type == "ip")?.Value;
                 var requestIp = context.Connection.RemoteIpAddress?.ToString();
 
-                var tokenRepo = context.RequestServices.GetRequiredService<ITokenRepository>();
-                var storedToken = await tokenRepo.GetAccessTokenAsync(token);
+                var tokenRecord = await _tokenRepo.GetAccessTokenAsync(token);
 
-                if (storedToken == null ||
-                    storedToken.ExpiresAt < DateTime.UtcNow ||
-                    storedToken.IpAddress != requestIp)
+                if (tokenRecord == null ||
+                    tokenRecord.ExpiresAt < DateTime.UtcNow ||
+                    tokenRecord.IpAddress != requestIp ||
+                    tokenRecord.UserId.ToString() != userId)
                 {
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsync("Access token is invalid, expired, or IP-mismatched.");
+                    context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                    await context.Response.WriteAsync("Access token is invalid, expired, or IP mismatch.");
                     return;
                 }
             }
         }
 
-        await _next(context);
+        await next(context);
     }
 }
