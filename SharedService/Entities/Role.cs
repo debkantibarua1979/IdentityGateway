@@ -11,4 +11,5 @@ public class Role
 
     public ICollection<User>? Users { get; set; }
     public ICollection<RolePermissionRole>? RolePermissionRoles { get; set; }
+        = new List<RolePermissionRole>();
 }
