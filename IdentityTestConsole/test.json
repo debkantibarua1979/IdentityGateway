@@ -1,0 +1,9 @@
+{
+  "IdentityServiceBaseUrl": "http://localhost:5001/api",
+  "ResourceServiceBaseUrl": "http://localhost:5001/resource/api",
+  "Jwt": {
+    "Key": "ThisIsASuperSecretKeyForJwtTokenGeneration",
+    "Issuer": "IdentityService",
+    "Audience": "ResourceConsumers"
+  }
+}
