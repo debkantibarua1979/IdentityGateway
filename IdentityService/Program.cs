@@ -1,110 +1,95 @@
 using System.Text;
 using IdentityService.Data;
 using IdentityService.Dtos;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using Ocelot.DependencyInjection;
-using Ocelot.Middleware;
-using IdentityService.Services;
 using IdentityService.Middlewares;
 using IdentityService.Repositories.Implementations;
 using IdentityService.Repositories.Interfaces;
 using IdentityService.Services.Implementations;
 using IdentityService.Services.Interfaces;
-
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Ocelot.DependencyInjection;
+using Ocelot.Middleware;
+using Ocelot.Responder;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ Load Ocelot configuration separately
-builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
-
-// ---- Configure JwtOptions ----
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
-var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>();
+// Load JWT settings
+builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services.Configure<JwtOptions>(jwtSection);
+var jwtOptions = jwtSection.Get<JwtOptions>();
 var key = Encoding.UTF8.GetBytes(jwtOptions.Key);
 
-// ---- Database (SQLite) ----
+// DbContext (SQLite)
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ---- Repositories ----
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
-builder.Services.AddScoped<ITokenRepository, TokenRepository>();
-
-// ---- Services ----
-builder.Services.AddScoped<IAuthService, AuthService>();
-
-// ---- Controllers and Swagger ----
+// Add Controllers
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "IdentityService API", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme.",
-        In = ParameterLocation.Header,
-        Name = "Authorization",
-        Type = SecuritySchemeType.ApiKey
-    });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme {
-                Reference = new OpenApiReference {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
-    });
-});
 
-// ---- JWT Authentication ----
+// Register Services & Repositories
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<ITokenRepository, TokenRepository>();
+builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
+
+// Register Middleware
+builder.Services.AddScoped<TokenExpirationMiddleware>();
+
+// Register Custom IHttpResponder (for Ocelot 24+ compatibility)
+builder.Services.AddSingleton<IHttpResponder, SafeHttpResponder>();
+
+// JWT Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer("Bearer", options =>
+.AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
         ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
         ClockSkew = TimeSpan.Zero,
+        ValidateIssuerSigningKey = true,
         ValidIssuer = jwtOptions.Issuer,
         ValidAudience = jwtOptions.Audience,
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 });
 
+// Add Authorization
 builder.Services.AddAuthorization();
 
+// Add Ocelot (using ocelot.json)
+builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
+builder.Services.AddOcelot(builder.Configuration);
 
-builder.Services.AddOcelot();
+// Swagger (optional for debugging)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// ---- Middleware Pipeline ----
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Middleware pipeline
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.UseRouting();
 
 app.UseAuthentication();
-app.UseMiddleware<TokenExpirationMiddleware>();
 app.UseAuthorization();
+
+// Token expiration check middleware
+app.UseMiddleware<TokenExpirationMiddleware>();
 
 app.MapControllers();
 
-
+// Ocelot gateway
 await app.UseOcelot();
+
 app.Run();
