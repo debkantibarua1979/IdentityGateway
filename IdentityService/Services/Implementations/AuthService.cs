@@ -1,166 +1,133 @@
-using System.Security.Cryptography;
-using IdentityService.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using IdentityService.Dtos;
 using IdentityService.Repositories.Interfaces;
 using IdentityService.Services.Interfaces;
-using Microsoft.Extensions.Options;
-
-namespace IdentityService.Services.Implementations;
-
-using IdentityService.Dtos;
+using Microsoft.IdentityModel.Tokens;
 using SharedService.Entities;
 
-
-
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using BCrypt.Net;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.EntityFrameworkCore;
-using SharedService.Entities;
-
-
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-
-using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
-using BCrypt.Net;
+namespace UserManagement.Application.Services.Impl;
 
 public class AuthService : IAuthService
 {
-    private readonly IUserRepository _userRepo;
-    private readonly IRolePermissionRepository _permissionRepo;
-    private readonly ITokenRepository _tokenRepo;
+    private readonly IUserService _userService;
+    private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly JwtOptions _jwtOptions;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public AuthService(
-        IUserRepository userRepo,
-        IRolePermissionRepository permissionRepo,
-        ITokenRepository tokenRepo,
-        IOptions<JwtOptions> jwtOptions)
+        IUserService userService,
+        IRefreshTokenRepository refreshTokenRepository,
+        JwtOptions jwtOptions,
+        IHttpContextAccessor httpContextAccessor)
     {
-        _userRepo = userRepo;
-        _permissionRepo = permissionRepo;
-        _tokenRepo = tokenRepo;
-        _jwtOptions = jwtOptions.Value;
-    }
-
-    public async Task<GenericResult> RegisterAsync(RegisterRequest request)
-    {
-        var existing = await _userRepo.GetByEmailAsync(request.Email);
-        if (existing != null)
-            return GenericResult.Fail("Email already in use.");
-
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = request.Email,
-            Password = BCrypt.HashPassword(request.Password),
-            RoleId = request.RoleId
-        };
-
-        await _userRepo.CreateUserAsync(user);
-        return GenericResult.Ok("User registered successfully.");
+        _userService = userService;
+        _refreshTokenRepository = refreshTokenRepository;
+        _jwtOptions = jwtOptions;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<AuthResponse?> LoginAsync(LoginRequest request)
     {
-        var user = await _userRepo.GetByEmailAsync(request.Email);
-        if (user == null || !BCrypt.Verify(request.Password, user.Password))
+        var user = await _userService.GetByEmailAsync(request.Email);
+        if (user == null)
             return null;
 
-        var permissions = await _permissionRepo.GetPermissionsByUserIdAsync(user.Id);
+        var isValid = await _userService.CheckPasswordAsync(user.Username, request.Password);
+        if (!isValid)
+            return null;
 
-        var accessToken = GenerateAccessToken(user, permissions, request.IpAddress);
-        var refreshToken = GenerateRefreshToken();
+        var permissions = await _userService.GetUserPermissionsAsync(user.Id);
 
-        var expiresAt = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes);
+        string ipAddress = GetCurrentIpAddress();
 
-        await _tokenRepo.SaveAccessTokenAsync(new AccessToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            Token = accessToken,
-            ExpiresAt = expiresAt,
-            IpAddress = request.IpAddress
-        });
+        var accessToken = GenerateJwtToken(user, permissions, ipAddress);
+        var refreshToken = Guid.NewGuid().ToString();
 
-        await _tokenRepo.SaveRefreshTokenAsync(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpireDays),
-            IpAddress = request.IpAddress,
-            IsRevoked = false
-        });
+        await _refreshTokenRepository.StoreAsync(user.Id, refreshToken, ipAddress, _jwtOptions.RefreshTokenExpireDays);
 
         return new AuthResponse
         {
+            UserId = user.Id,
+            Username = user.Username,
+            Email = user.Email,
             AccessToken = accessToken,
-            RefreshToken = refreshToken
+            RefreshToken = refreshToken,
+            Permissions = permissions.ConvertAll(p => p.Value)
         };
     }
 
     public async Task<AuthResponse?> RefreshAccessTokenAsync(RefreshTokenRequest request)
     {
-        var refresh = await _tokenRepo.GetRefreshTokenAsync(request.RefreshToken);
-        if (refresh == null || refresh.ExpiresAt < DateTime.UtcNow || refresh.IsRevoked)
+        var userId = ValidateJwtAndGetUserId(request.RefreshToken);
+        if (userId == null)
             return null;
 
-        var user = await _userRepo.GetByIdAsync(refresh.UserId);
+        var isValidRefresh = await _refreshTokenRepository.ValidateAsync(userId.Value, request.RefreshToken);
+        if (!isValidRefresh)
+            return null;
+
+        var user = await _userService.GetByIdAsync(userId.Value);
         if (user == null)
             return null;
 
-        var permissions = await _permissionRepo.GetPermissionsByUserIdAsync(user.Id);
+        var permissions = await _userService.GetUserPermissionsAsync(user.Id);
+        var ipAddress = GetCurrentIpAddress();
 
-        var newAccessToken = GenerateAccessToken(user, permissions, request.IpAddress);
-        var newRefreshToken = GenerateRefreshToken();
+        var newAccessToken = GenerateJwtToken(user, permissions, ipAddress);
+        var newRefreshToken = Guid.NewGuid().ToString();
 
-        var expiresAt = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes);
-
-        await _tokenRepo.SaveAccessTokenAsync(new AccessToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            Token = newAccessToken,
-            ExpiresAt = expiresAt,
-            IpAddress = request.IpAddress
-        });
-
-        await _tokenRepo.SaveRefreshTokenAsync(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = newRefreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpireDays),
-            IpAddress = request.IpAddress,
-            IsRevoked = false
-        });
-
-        await _tokenRepo.InvalidateRefreshTokenAsync(refresh.Token);
+        await _refreshTokenRepository.StoreAsync(user.Id, newRefreshToken, ipAddress, _jwtOptions.RefreshTokenExpireDays);
 
         return new AuthResponse
         {
+            UserId = user.Id,
+            Username = user.Username,
+            Email = user.Email,
             AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken
+            RefreshToken = newRefreshToken,
+            Permissions = permissions.ConvertAll(p => p.Value)
         };
     }
 
-    private string GenerateAccessToken(User user, List<string> permissions, string? ip)
+    public async Task<GenericResult> RegisterAsync(RegisterRequest request)
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = request.UserName,
+            Email = request.Email,
+            RoleId = request.RoleId
+        };
+
+        try
+        {
+            await _userService.CreateUserAsync(user, request.Password);
+            return GenericResult.Ok("User registered successfully.");
+        }
+        catch (Exception ex)
+        {
+            return GenericResult.Fail(ex.Message);
+        }
+    }
+
+    private string GenerateJwtToken(User user, List<RolePermission> permissions, string ipAddress)
     {
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, user.Email),
-            new("ip", ip ?? ""),
-            new("role", user.RoleId.ToString())
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("ip", ipAddress)
         };
 
-        claims.AddRange(permissions.Select(p => new Claim("permission", p)));
+        foreach (var p in permissions)
+        {
+            claims.Add(new Claim("permission", p.Value));
+        }
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
@@ -174,9 +141,19 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private string GenerateRefreshToken()
+    private Guid? ValidateJwtAndGetUserId(string token)
     {
-        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var handler = new JwtSecurityTokenHandler();
+        var jwtToken = handler.ReadJwtToken(token);
+        var sub = jwtToken?.Subject;
+
+        return Guid.TryParse(sub, out var id) ? id : null;
+    }
+
+    private string GetCurrentIpAddress()
+    {
+        return _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 }
+
 

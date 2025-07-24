@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResourceService.Entities;
+using SharedService.Entities;
+using SharedService.Entities.JoinEntities;
 using Task = ResourceService.Entities.Task;
 
 
@@ -7,9 +9,10 @@ namespace ResourceService.Data;
 
 public class AppDbContext: DbContext
 {
-    public DbSet<Department> Departments { get; set; }
-    public DbSet<Project> Projects { get; set; }
-    public DbSet<Task> Tasks { get; set; }
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<RoleRolePermission> RoleRolePermissions => Set<RoleRolePermission>();
     
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)

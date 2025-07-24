@@ -16,7 +16,7 @@ public class AppDbContext: DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Role> Roles { get; set; }
     public DbSet<RolePermission> RolePermissions { get; set; }
-    public DbSet<RolePermissionRole> RolePermissionRoles { get; set; }
+    public DbSet<RoleRolePermission> RoleRolePermissions { get; set; }
 
     // Token tracking
     public DbSet<AccessToken> AccessTokens { get; set; }
@@ -27,18 +27,30 @@ public class AppDbContext: DbContext
         base.OnModelCreating(modelBuilder);
 
         // Role-Permission join key
-        modelBuilder.Entity<RolePermissionRole>()
-            .HasKey(rpr => new { rpr.RoleId, rpr.RolePermissionId });
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Role)
+            .WithMany(r => r.Users)
+            .HasForeignKey(u => u.RoleId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        modelBuilder.Entity<RolePermissionRole>()
-            .HasOne(rpr => rpr.Role)
-            .WithMany(r => r.RolePermissionRoles)
-            .HasForeignKey(rpr => rpr.RoleId);
+        modelBuilder.Entity<RoleRolePermission>()
+            .HasKey(rrp => new { rrp.RoleId, rrp.RolePermissionId });
 
-        modelBuilder.Entity<RolePermissionRole>()
-            .HasOne(rpr => rpr.RolePermission)
-            .WithMany(rp => rp.RolePermissionRoles)
-            .HasForeignKey(rpr => rpr.RolePermissionId);
+        modelBuilder.Entity<RoleRolePermission>()
+            .HasOne(rrp => rrp.Role)
+            .WithMany(r => r.RoleRolePermissions)
+            .HasForeignKey(rrp => rrp.RoleId);
+
+        modelBuilder.Entity<RoleRolePermission>()
+            .HasOne(rrp => rrp.RolePermission)
+            .WithMany(rp => rp.RoleRolePermissions)
+            .HasForeignKey(rrp => rrp.RolePermissionId);
+        
+        modelBuilder.Entity<RolePermission>()
+            .HasOne(rp => rp.Parent)
+            .WithMany(rp => rp.Children)
+            .HasForeignKey(rp => rp.ParentId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Token uniqueness
         modelBuilder.Entity<AccessToken>()

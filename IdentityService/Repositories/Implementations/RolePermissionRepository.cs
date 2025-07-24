@@ -2,94 +2,88 @@ using IdentityService.Data;
 using IdentityService.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using SharedService.Entities;
-using SharedService.Entities.JoinEntities;
 
 namespace IdentityService.Repositories.Implementations;
 
 public class RolePermissionRepository : IRolePermissionRepository
 {
-    private readonly AppDbContext _db;
+    private readonly AppDbContext _context;
 
-    public RolePermissionRepository(AppDbContext db)
+    public RolePermissionRepository(AppDbContext context)
     {
-        _db = db;
+        _context = context;
     }
 
-    public async Task<List<RolePermission>> GetAllPermissionsAsync()
+    public async Task<RolePermission?> GetByIdAsync(Guid id)
     {
-        return await _db.RolePermissions.ToListAsync();
+        return await _context.RolePermissions
+            .Include(rp => rp.Parent)
+            .Include(rp => rp.Children)
+            .FirstOrDefaultAsync(rp => rp.Id == id);
     }
 
-    public async Task AssignPermissionsToRoleAsync(Guid roleId, IEnumerable<Guid> permissionIds)
+    public async Task<List<RolePermission>> GetAllAsync()
     {
-        var existing = _db.RolePermissionRoles.Where(rpr => rpr.RoleId == roleId);
-        _db.RolePermissionRoles.RemoveRange(existing);
-
-        foreach (var permissionId in permissionIds)
-        {
-            _db.RolePermissionRoles.Add(new RolePermissionRole
-            {
-                RoleId = roleId,
-                RolePermissionId = permissionId
-            });
-        }
-
-        await _db.SaveChangesAsync();
+        return await _context.RolePermissions.ToListAsync();
     }
 
-    public async Task<List<string>> GetPermissionsByUserIdAsync(Guid userId)
+    public async Task AddAsync(RolePermission rolePermission)
     {
-        var user = await _db.Users
-            .Include(u => u.Role)
-                .ThenInclude(r => r.RolePermissionRoles)
-                    .ThenInclude(rpr => rpr.RolePermission)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
-        if (user?.Role == null)
-            return new List<string>();
-
-        var directPermissions = user.Role.RolePermissionRoles
-            .Select(rpr => rpr.RolePermission.Id)
-            .ToList();
-
-        var allPermissions = await GetPermissionsWithAncestorsAsync(directPermissions);
-
-        return allPermissions
-            .Select(p => p.PermissionName)
-            .Distinct()
-            .ToList();
+        await _context.RolePermissions.AddAsync(rolePermission);
     }
 
-    public async Task<List<RolePermission>> GetPermissionsWithAncestorsAsync(IEnumerable<Guid> permissionIds)
+    public async Task<List<RolePermission>> GetAllWithHierarchyAsync()
     {
-        var visited = new HashSet<Guid>();
+        return await _context.RolePermissions
+            .Include(rp => rp.Parent)
+            .Include(rp => rp.Children)
+            .ToListAsync();
+    }
+
+    public async Task<List<RolePermission>> GetAncestorsAsync(Guid permissionId)
+    {
         var result = new List<RolePermission>();
+        var visited = new HashSet<Guid>();
 
-        foreach (var permissionId in permissionIds)
+        var current = await _context.RolePermissions
+            .Include(rp => rp.Parent)
+            .FirstOrDefaultAsync(rp => rp.Id == permissionId);
+
+        while (current?.Parent != null && !visited.Contains(current.Parent.Id))
         {
-            var permission = await _db.RolePermissions.FindAsync(permissionId);
-            if (permission != null)
-            {
-                await AddWithAncestorsAsync(permission, visited, result);
-            }
+            result.Add(current.Parent);
+            visited.Add(current.Parent.Id);
+
+            current = await _context.RolePermissions
+                .Include(rp => rp.Parent)
+                .FirstOrDefaultAsync(rp => rp.Id == current.Parent.Id);
         }
 
         return result;
     }
 
-    private async Task AddWithAncestorsAsync(RolePermission permission, HashSet<Guid> visited, List<RolePermission> result)
+    public async Task<List<RolePermission>> GetDescendantsAsync(Guid permissionId)
     {
-        if (visited.Contains(permission.Id))
-            return;
+        var descendants = new List<RolePermission>();
+        var stack = new Stack<Guid>();
+        stack.Push(permissionId);
 
-        visited.Add(permission.Id);
-        result.Add(permission);
-
-        if (permission.ParentId.HasValue)
+        while (stack.Count > 0)
         {
-            var parent = await _db.RolePermissions.FindAsync(permission.ParentId.Value);
-            if (parent != null)
-                await AddWithAncestorsAsync(parent, visited, result);
+            var currentId = stack.Pop();
+
+            var children = await _context.RolePermissions
+                .Where(rp => rp.ParentId == currentId)
+                .ToListAsync();
+
+            foreach (var child in children)
+            {
+                descendants.Add(child);
+                stack.Push(child.Id);
+            }
         }
+
+        return descendants;
     }
 }
+

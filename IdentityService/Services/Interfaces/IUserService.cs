@@ -1,8 +1,8 @@
 using SharedService.Entities;
 
-namespace IdentityService.Repositories.Interfaces;
+namespace IdentityService.Services.Interfaces;
 
-public interface IUserRepository
+public interface IUserService
 {
     Task<User?> GetByIdAsync(Guid id);
 
@@ -12,9 +12,13 @@ public interface IUserRepository
 
     Task<List<User>> GetAllAsync();
 
-    Task AddAsync(User user);
+    Task CreateUserAsync(User user, string plainPassword);
+
+    Task<bool> CheckPasswordAsync(string username, string plainPassword);
 
     Task<bool> ExistsByUsernameAsync(string username);
 
     Task<bool> ExistsByEmailAsync(string email);
+
+    Task<List<RolePermission>> GetUserPermissionsAsync(Guid userId);
 }

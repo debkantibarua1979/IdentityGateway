@@ -10,6 +10,9 @@ public class Role
     public string Name { get; set; }
 
     public ICollection<User>? Users { get; set; }
-    public ICollection<RolePermissionRole>? RolePermissionRoles { get; set; }
-        = new List<RolePermissionRole>();
+    public ICollection<RoleRolePermission>? RoleRolePermissions { get; set; }
+        = new List<RoleRolePermission>();
+    
+    public User? User { get; set; }
 }
+

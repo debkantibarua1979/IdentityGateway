@@ -9,36 +9,45 @@ using IdentityService.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Ocelot.DependencyInjection;
 using Ocelot.Middleware;
 using Ocelot.Responder;
+using UserManagement.Application.Services.Impl;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load JWT settings
-builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-var jwtSection = builder.Configuration.GetSection("Jwt");
-builder.Services.Configure<JwtOptions>(jwtSection);
-var jwtOptions = jwtSection.Get<JwtOptions>();
-var key = Encoding.UTF8.GetBytes(jwtOptions.Key);
+// Load JwtOptions
+builder.Services.Configure<JwtOptions>(
+    builder.Configuration.GetSection("JwtOptions"));
+var jwtOptions = builder.Configuration
+    .GetSection("JwtOptions").Get<JwtOptions>();
+
+var key = Encoding.UTF8.GetBytes(jwtOptions.SecretKey);
 
 // DbContext (SQLite)
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add Controllers
+// Controllers
 builder.Services.AddControllers();
 
-// Register Services & Repositories
-builder.Services.AddScoped<IAuthService, AuthService>();
+// Register IHttpContextAccessor for IP capture
+builder.Services.AddHttpContextAccessor();
+
+// Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<ITokenRepository, TokenRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
+// Services
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
-// Register Middleware
-builder.Services.AddScoped<TokenExpirationMiddleware>();
+// TokenExpirationMiddleware registered as IMiddleware
+builder.Services.AddTransient<TokenExpirationMiddleware>();
 
-// Register Custom IHttpResponder (for Ocelot 24+ compatibility)
+// Ocelot safe responder
 builder.Services.AddSingleton<IHttpResponder, SafeHttpResponder>();
 
 // JWT Authentication
@@ -62,31 +71,35 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Add Authorization
+// Authorization
 builder.Services.AddAuthorization();
 
-// Add Ocelot (using ocelot.json)
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Identity API", Version = "v1" });
+});
+
+// Ocelot config
 builder.Configuration.AddJsonFile("ocelot.json", optional: false, reloadOnChange: true);
 builder.Services.AddOcelot(builder.Configuration);
 
-// Swagger (optional for debugging)
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 var app = builder.Build();
 
-// Middleware pipeline
+// Swagger UI
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// Routing
 app.UseRouting();
 
+// Auth + Middleware
 app.UseAuthentication();
+app.UseMiddleware<TokenExpirationMiddleware>();
 app.UseAuthorization();
 
-// Token expiration check middleware
-app.UseMiddleware<TokenExpirationMiddleware>();
-
+// API
 app.MapControllers();
 
 // Ocelot gateway

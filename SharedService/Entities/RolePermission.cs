@@ -5,16 +5,17 @@ namespace SharedService.Entities;
 
 public class RolePermission
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
 
-    public string PermissionName { get; set; }
-    public string VisibleName { get; set; }
-    
-    // Parent-child hierarchy 
+    public string Name { get; set; } = string.Empty;
+
+    public string Value { get; set; } = string.Empty;
+
     public Guid? ParentId { get; set; }
+
     public RolePermission? Parent { get; set; }
-    public ICollection<RolePermission>? Children { get; set; } = new List<RolePermission>();
-    
-    // Many-to-many relationship with roles
-    public ICollection<RolePermissionRole>? RolePermissionRoles { get; set; }
+
+    public ICollection<RolePermission> Children { get; set; } = new List<RolePermission>();
+
+    public ICollection<RoleRolePermission> RoleRolePermissions { get; set; } = new List<RoleRolePermission>();
 }

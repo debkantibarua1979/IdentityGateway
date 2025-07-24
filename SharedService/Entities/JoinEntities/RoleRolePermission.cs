@@ -1,6 +1,6 @@
 namespace SharedService.Entities.JoinEntities;
 
-public class RolePermissionRole
+public class RoleRolePermission
 {
     public Guid RoleId { get; set; }
     public Role? Role { get; set; }
